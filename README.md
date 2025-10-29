@@ -1,137 +1,144 @@
-# hookdapp
+# Hookd Android Shells
 
-Trusted Web Activity (TWA) project for wrapping [hookd.fish](https://hookd.fish).
+This repository contains the Android wrappers that publish the existing [hookd.fish](https://hookd.fish) Progressive Web App in
+two different forms:
 
-## Development setup
+- A **Trusted Web Activity (TWA)** generated with Bubblewrap that launches Chrome in full-screen mode and serves the production
+  site directly from the network.
+- A minimal **Capacitor shell** that can host a locally built copy of the PWA when native plugins (Camera/Filesystem) are
+  required to preserve photo metadata during uploads.
 
-1. Install the Bubblewrap CLI:
+The web experience remains the source of truth. The Android projects here focus on meeting Play Store requirements, verifying
+the Digital Asset Links association, and keeping optional native integrations isolated from the web codebase.
+
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `android/` | Bubblewrap-generated Android project. Contains Gradle build files, the TWA launcher activity, and placeholders for signing material and icons. |
+| `android/scripts/bootstrap_gradle_wrapper.py` | Helper that restores the Gradle wrapper JAR without committing binaries. |
+| `android/ASSET_REQUIREMENTS.md` | List of binary launch/splash assets that must be provided locally before shipping. |
+| `android/BINARY_ASSETS.md` | Checklist of Gradle wrapper and icon binaries that are ignored by Git. |
+| `android/KEYSTORE_PLACEHOLDER.md` | Instructions for supplying the release keystore referenced by Bubblewrap. |
+| `capacitor.config.ts` | Capacitor configuration that keeps Camera uploads as URI-based files so EXIF data is not stripped. |
+| `package.json` | NPM metadata and scripts for syncing Capacitor platforms. |
+| `web-manifest.json` | Snapshot of the production web manifest used by Bubblewrap when regenerating the Android project. |
+
+## Prerequisites
+
+Install the following tooling once on your workstation:
+
+- **Node.js 18+** and **npm 9+** for the Capacitor CLI.
+- **Java Development Kit (JDK) 17** – required by the current Android Gradle Plugin and Bubblewrap.
+- **Android SDK command-line tools** with API 34 or newer platforms.
+- **Bubblewrap CLI** (`npm install -g @bubblewrap/cli`) for generating and updating the TWA project.
+- Optional: **Android Studio Electric Eel or newer** for editing and running the native project.
+
+## Android SDK and Bubblewrap environment
+
+Bubblewrap expects the Android SDK to be present and referenced via environment variables. The following example installs the
+SDK to `~/.bubblewrap/android_sdk`:
+
+```bash
+export ANDROID_SDK_ROOT="$HOME/.bubblewrap/android_sdk"
+mkdir -p "$ANDROID_SDK_ROOT"
+# Download the latest command-line tools ZIP from Google before running these commands.
+unzip commandlinetools-linux-*_latest.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
+mv "$ANDROID_SDK_ROOT/cmdline-tools"/cmdline-tools "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+"$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+  "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+```
+
+After installing, run `bubblewrap doctor` to confirm Bubblewrap can locate both the JDK and the Android SDK. Either export
+`ANDROID_SDK_ROOT`/`ANDROID_HOME` in your shell profile or create `android/local.properties` with
+`sdk.dir=/absolute/path/to/android_sdk` so Gradle knows where to find the SDK.
+
+## Trusted Web Activity workflow
+
+1. **Install/upgrade Bubblewrap**
    ```bash
    npm install -g @bubblewrap/cli
    ```
-2. Install JDK 17 and the Android SDK command-line tools. Download the
-   `commandlinetools-linux` archive from Google, extract it, and install the
-   required platform components:
+
+2. **Keep the TWA manifest in sync**
+   The current configuration is stored in `android/twa-manifest.json`. To refresh the Android project after changing the web
+   manifest, run:
    ```bash
-   export ANDROID_SDK_ROOT="$HOME/.bubblewrap/android_sdk"
-   mkdir -p "$ANDROID_SDK_ROOT"
-   unzip commandlinetools-linux-*_latest.zip -d "$ANDROID_SDK_ROOT/cmdline-tools"
-   mv "$ANDROID_SDK_ROOT/cmdline-tools"/cmdline-tools "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-   "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
-     "platform-tools" "build-tools;34.0.0" "platforms;android-34"
-   ln -s cmdline-tools/latest "$ANDROID_SDK_ROOT/tools"
-   ln -s cmdline-tools/latest/bin "$ANDROID_SDK_ROOT/bin"
+   cd android
+   bubblewrap update --manifest=https://hookd.fish/manifest.json
    ```
-   Run `bubblewrap doctor` to confirm Bubblewrap can locate both the JDK and the
-   Android SDK.
+   Review the generated diff before committing.
 
-## Building the Android project
+3. **Restore ignored binaries**
+   - Download the Gradle wrapper JAR once per machine:
+     ```bash
+     python android/scripts/bootstrap_gradle_wrapper.py
+     ```
+   - Provide launcher/splash/notification icons for every density listed in `android/ASSET_REQUIREMENTS.md`. The repository only
+     contains XML placeholders so binary artwork must be copied in locally before building.
 
-1. Set the Android SDK environment variables (or add a `local.properties` file
-   inside `android/` containing `sdk.dir=/path/to/sdk`):
-   ```bash
-   export ANDROID_HOME="$ANDROID_SDK_ROOT"
-   export ANDROID_SDK_ROOT="$ANDROID_SDK_ROOT"
-   ```
-2. Add the release keystore referenced by Bubblewrap. The repository does not
-   include binary signing material; follow the instructions in
-   `android/KEYSTORE_PLACEHOLDER.md` to generate or supply a file named
-   `android/android.keystore` with the expected credentials.
+4. **Add signing material**
+   Place a keystore named `android/android.keystore` using the credentials from `android/KEYSTORE_PLACEHOLDER.md`. The same SHA256
+   fingerprint must appear in `https://hookd.fish/.well-known/assetlinks.json` so the Play Store build can verify the association.
 
-3. Download the Gradle wrapper bootstrap JAR by running the helper script:
-   ```bash
-   python android/scripts/bootstrap_gradle_wrapper.py
-   ```
-   The binary wrapper is ignored by Git; see
-   `android/GRADLE_WRAPPER_PLACEHOLDER.md` for more background.
-
-4. Restore the binary artwork. All PNG launch, notification, splash, and store
-   icons are ignored by Git so the project ships with XML placeholders instead.
-   Consult `android/ASSET_REQUIREMENTS.md` for the list of expected files and
-   densities, then export the artwork from your design source before building.
-
-5. Build the release artifacts from the `android/` directory:
+5. **Build release artifacts**
    ```bash
    cd android
    bubblewrap build
    ```
-   When prompted, use the provided keystore alias `hookd` with password
-   `Hookd123` for both the keystore and key.
+   Bubblewrap produces `app-release-signed.apk` and `app-release-bundle.aab` inside `android/`. Install the APK on a device to
+   confirm Chrome launches the verified origin (the overflow menu should show “Hookd” instead of Chrome controls).
 
-The build outputs `app-release-signed.apk` and `app-release-bundle.aab` inside
-the `android/` directory. Bubblewrap also stores the original TWA configuration
-in `android/twa-manifest.json` for future updates.
-Capacitor wrapper for the hookd.fish PWA.
+## Capacitor workflow (metadata-preserving uploads)
 
-## Prerequisites
+The Capacitor shell is optional but provides a WebView with the Camera and Filesystem plugins pre-registered. When the web app
+requests `Camera.getPhoto({ resultType: CameraResultType.Uri, allowEditing: false })`, EXIF/GPS metadata remains intact because
+Capacitor returns a file URI instead of base64 data.
 
-- Node.js 18+
-- npm 9+
-- Android Studio (Electric Eel or newer) with the Android SDK installed
-- Java 17 (required by the current Android Gradle Plugin)
+1. **Install JavaScript dependencies**
+   ```bash
+   npm install
+   ```
 
-Install dependencies once after cloning:
+2. **Build the web assets**
+   Replace the placeholder build script in `package.json` with the real PWA build command if necessary, then run:
+   ```bash
+   npm run build
+   ```
+   Ensure the compiled app lands in `dist/` (or update `capacitor.config.ts` to point `webDir` at the correct folder).
 
-```bash
-npm install
-```
+3. **Sync native platforms**
+   ```bash
+   npx cap sync android
+   ```
+   This copies `dist/` into `android/app/src/main/assets/public/`, refreshes plugin registries, and regenerates any Capacitor
+   resource files. Use `npx cap copy android` for incremental asset-only updates.
 
-### Restore required binary assets
+4. **Open the project in Android Studio (optional)**
+   ```bash
+   npx cap open android
+   ```
 
-This repository omits the Gradle wrapper JAR and the generated launcher/splash PNGs to keep the history free of binary blobs. Restore them before opening the Android project by regenerating the platform shell locally:
+5. **Test metadata retention**
+   Deploy the app to a device or emulator, capture/upload a photo from a component that requests `CameraResultType.Uri`, and then
+   inspect the resulting file with `exiftool` or a similar utility to verify GPS and timestamp fields remain present.
 
-```bash
-npx cap add android
-```
+   ```bash
+   exiftool /path/to/photo.jpg | grep -E 'Create Date|GPS'
+   ```
 
-Then copy the following outputs back into this repo (see `android/BINARY_ASSETS.md` for the complete list):
+If you need to regenerate the Android platform from scratch, run `npx cap add android`. The command restores the binary launcher
+icons and splash images described in `android/BINARY_ASSETS.md` before you copy them into version control.
 
-- `android/gradle/wrapper/gradle-wrapper.jar`
-- All launcher icons under `android/app/src/main/res/mipmap-*/`
-- All splash screens under `android/app/src/main/res/drawable*/`
+## Digital Asset Links checklist
 
-## Build the web assets
+To publish on the Play Store, make sure the app and site association is valid:
 
-1. Build or export the Hookd PWA so that the production assets land in `dist/`.
-   - Replace the placeholder `npm run build` script in `package.json` with the build command from the web project if needed.
-2. Verify that `dist/index.html` exists and contains the compiled app.
+1. Choose a package name (this project uses `fish.hookd.app`).
+2. Generate or reuse the signing keystore; retrieve its SHA256 fingerprint with `keytool -list -v -keystore android/android.keystore`.
+3. Host `https://hookd.fish/.well-known/assetlinks.json` with an entry that matches the package name and fingerprint.
+4. Install a release build on a device and verify the Chrome overflow menu shows the app name, indicating the association
+   succeeded.
 
-```bash
-npm run build
-```
-
-## Sync assets into the Capacitor shell
-
-After building the PWA assets, sync them into the native projects:
-
-```bash
-npx cap sync android
-```
-
-This copies `dist/` into `android/app/src/main/assets/public/` and refreshes the plugin configuration (Camera and Filesystem). If you only need to copy web assets without reinstalling plugins, run `npx cap copy android` instead.
-
-To open the Android project in Android Studio:
-
-```bash
-npx cap open android
-```
-
-## File-upload metadata handling
-
-- `capacitor.config.ts` configures the Camera plugin to always return URI-based results with editing disabled. This preserves EXIF data when the Hybrid app requests media from the Camera plugin.
-- `android/app/src/main/java/fish/hookd/app/MainActivity.java` registers the Camera and Filesystem plugins explicitly and enables file/content access on the underlying WebView so uploads routed through the WebView bridge retain file metadata.
-- The project depends on `@capacitor/camera@^5.0.10` and `@capacitor/filesystem@^5.2.2`. Make sure these versions (or newer within the same major) are installed so EXIF metadata is available via `photo.exif` when calling `Camera.getPhoto({ resultType: CameraResultType.Uri })`.
-
-## Testing metadata preservation
-
-1. Build the web bundle and sync it into Android as described above.
-2. Run the Android project from Android Studio on a device or emulator.
-3. In the app, trigger an upload using a file input or Camera integration that requests `CameraResultType.Uri`.
-4. On the receiving backend (or by using `adb pull` on the temporary file path returned by the Filesystem plugin), inspect the uploaded image with `exiftool` and confirm GPS/date metadata is intact.
-
-Example command after pulling the uploaded file from the device:
-
-```bash
-exiftool path/to/photo.jpg | grep -E 'Create Date|GPS'
-```
-
-If metadata is missing, confirm that the Camera plugin call does **not** request base64 output (`resultType: CameraResultType.Base64`) or enable editing, both of which strip EXIF information on Android.
+Following the sections above keeps the Android wrapper lightweight while ensuring the web experience remains installable and can
+access native upload APIs when necessary.

@@ -1,0 +1,10 @@
+{
+  "name": "Hookd",
+  "short_name": "Hookd",
+  "start_url": "https://hookd.fish/",
+  "scope": "https://hookd.fish/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#38bdf8",
+  "icons": []
+}

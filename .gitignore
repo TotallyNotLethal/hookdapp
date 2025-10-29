@@ -1,3 +1,5 @@
+# Ignore keystore binaries generated or provided locally
+android/*.keystore
 node_modules/
 dist/
 .DS_Store

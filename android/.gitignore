@@ -1,3 +1,13 @@
+/.gradle/
+/local.properties
+/build/
+/app/build/
+/*.apk
+/*.aab
+/*.idsig
+store_icon.png
+app/src/main/res/**/*.png
+gradle/wrapper/gradle-wrapper.jar
 # Using Android gitignore template: https://github.com/github/gitignore/blob/HEAD/Android.gitignore
 
 # Built application files

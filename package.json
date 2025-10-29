@@ -1,0 +1,22 @@
+{
+  "name": "hookdapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Capacitor wrapper for the hookd.fish PWA",
+  "scripts": {
+    "build": "echo 'Please replace with actual PWA build command'",
+    "cap:sync": "capacitor sync",
+    "cap:copy": "capacitor copy",
+    "cap:open:android": "capacitor open android"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^5.7.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@capacitor/android": "^5.7.0",
+    "@capacitor/camera": "^5.0.10",
+    "@capacitor/core": "^5.7.0",
+    "@capacitor/filesystem": "^5.2.2"
+  }
+}

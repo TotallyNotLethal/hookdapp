@@ -39,4 +39,10 @@
     }]
     
   </string>  
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Hookd</string>
+    <string name="title_activity_main">Hookd</string>
+    <string name="package_name">fish.hookd.app</string>
+    <string name="custom_url_scheme">fish.hookd.app</string>
 </resources>
